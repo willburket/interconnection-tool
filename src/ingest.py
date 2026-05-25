@@ -1,4 +1,5 @@
-# src/ingest.py — download and clean the ERCOT interconnection queue
+# src/ingest.py — download and clean interconnection queue data
+# Supports ERCOT, CAISO, and PJM via ISO config registry
 
 import requests
 import pandas as pd
@@ -9,123 +10,190 @@ import logging
 import sys
 sys.path.append(str(Path(__file__).parent.parent))
 from config import (
-    ERCOT_QUEUE_URL, HIFLD_SUBSTATIONS_URL,
+    ISO, ISO_CONFIG, HIFLD_SUBSTATIONS_URL,
+    RAW_DATA_DIR, PROCESSED_DATA_DIR, GEO_DATA_DIR,
     QUEUE_RAW_FILE, QUEUE_CLEAN_FILE, SUBSTATIONS_FILE,
-    COLUMN_MAP, PROCESSED_DATA_DIR, RAW_DATA_DIR, GEO_DATA_DIR
 )
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
 
-# ── Queue download ──────────────────────────────────────────────────────────
+def _paths(iso: ISO) -> dict:
+    """Return resolved file paths for a given ISO."""
+    key = iso.value
+    return {
+        "raw":         f"{RAW_DATA_DIR}/{QUEUE_RAW_FILE.format(iso=key)}",
+        "clean":       f"{PROCESSED_DATA_DIR}/{QUEUE_CLEAN_FILE.format(iso=key)}",
+        "substations": f"{GEO_DATA_DIR}/{SUBSTATIONS_FILE.format(iso=key)}",
+    }
 
-def download_queue(url: str = ERCOT_QUEUE_URL, save_path: str = QUEUE_RAW_FILE) -> pd.DataFrame:
+
+# ── Queue download ───────────────────────────────────────────────────────────
+
+def download_queue(iso: ISO) -> pd.DataFrame:
     """
-    Pull the ERCOT Generator Interconnection Status Report Excel file.
+    Pull the interconnection queue Excel file for the given ISO.
     Saves raw file to data/raw/ and returns a raw DataFrame.
     """
-    log.info("Downloading ERCOT queue from %s", url)
+    cfg      = ISO_CONFIG[iso]
+    paths    = _paths(iso)
+    url      = cfg["queue_url"]
+
+    log.info("[%s] Downloading queue from %s", iso.value, url)
     response = requests.get(url, timeout=30)
     response.raise_for_status()
 
     Path(RAW_DATA_DIR).mkdir(parents=True, exist_ok=True)
-    with open(save_path, "wb") as f:
+    with open(paths["raw"], "wb") as f:
         f.write(response.content)
-    log.info("Saved raw file to %s", save_path)
 
-    # ERCOT reports often have a few header rows to skip — adjust if needed
-    df = pd.read_excel(BytesIO(response.content), skiprows=2)
-    return df
+    # Most ISO reports have 1-3 header rows — try skipping 2, fall back to 0
+    for skip in (2, 1, 0):
+        try:
+            df = pd.read_excel(BytesIO(response.content), skiprows=skip)
+            # Sanity check: if any expected column keywords appear, we're good
+            cols_lower = [str(c).lower() for c in df.columns]
+            if any(k in " ".join(cols_lower) for k in ["capacity", "fuel", "project"]):
+                log.info("[%s] Parsed with skiprows=%d (%d rows)", iso.value, skip, len(df))
+                return df
+        except Exception:
+            continue
+
+    # Last resort — return as-is
+    return pd.read_excel(BytesIO(response.content))
 
 
-def clean_queue(df: pd.DataFrame) -> pd.DataFrame:
+def clean_queue(df: pd.DataFrame, iso: ISO) -> pd.DataFrame:
     """
-    Normalize columns, cast types, drop withdrawn projects,
-    and save cleaned data to parquet.
+    Normalize, cast, filter, and save the queue DataFrame for the given ISO.
+    Applies the ISO-specific column map from config.
     """
-    # Normalize column headers
+    cfg              = ISO_CONFIG[iso]
+    column_map       = cfg["column_map"]
+    withdrawn_label  = cfg["withdrawn_label"]
+    paths            = _paths(iso)
+
+    # Normalize headers
     df.columns = df.columns.str.strip().str.lower()
 
-    # Rename to internal names using COLUMN_MAP
-    rename = {k: v for k, v in COLUMN_MAP.items() if k in df.columns}
+    # Rename to internal names
+    rename = {k: v for k, v in column_map.items() if k in df.columns}
     df = df.rename(columns=rename)
 
-    # Drop rows with no project ID or capacity
-    df = df.dropna(subset=["project_id", "capacity_mw"])
+    # Ensure required columns exist even if missing in source
+    for col in ["project_id", "project_name", "fuel_type", "capacity_mw",
+                "substation_name", "status", "study_phase"]:
+        if col not in df.columns:
+            df[col] = None
 
-    # Remove withdrawn projects
+    # Drop rows missing both ID and capacity
+    df = df.dropna(subset=["capacity_mw"])
+
+    # Remove withdrawn / cancelled
     if "status" in df.columns:
-        df = df[~df["status"].str.strip().str.lower().eq("withdrawn")]
+        df = df[~df["status"].str.strip().str.lower().eq(withdrawn_label)]
 
     # Cast types
     df["capacity_mw"] = pd.to_numeric(df["capacity_mw"], errors="coerce")
+    df = df.dropna(subset=["capacity_mw"])
+
     if "application_date" in df.columns:
         df["application_date"] = pd.to_datetime(df["application_date"], errors="coerce")
     if "voltage_kv" in df.columns:
         df["voltage_kv"] = pd.to_numeric(df["voltage_kv"], errors="coerce")
 
     # Normalize fuel type labels
-    if "fuel_type" in df.columns:
-        df["fuel_type"] = df["fuel_type"].str.strip().str.title()
+    df["fuel_type"] = df["fuel_type"].astype(str).str.strip().str.title()
 
-    # Days in queue (useful for analysis)
+    # CAISO-specific: normalize fuel type labels to common names
+    if iso == ISO.CAISO:
+        df["fuel_type"] = df["fuel_type"].replace({
+            "Photovoltaic":        "Solar",
+            "Pv":                  "Solar",
+            "Storage":             "Battery",
+            "Wind Turbine":        "Wind",
+            "Offshore Wind":       "Offshore Wind",
+            "Combined Cycle":      "Gas",
+            "Simple Cycle":        "Gas",
+            "Steam Turbine":       "Gas",
+        })
+
+    # Days in queue
     if "application_date" in df.columns:
         df["days_in_queue"] = (pd.Timestamp.today() - df["application_date"]).dt.days
 
+    # Tag the ISO so downstream modules know the source
+    df["iso"] = iso.value
+
     Path(PROCESSED_DATA_DIR).mkdir(parents=True, exist_ok=True)
-    df.to_parquet(QUEUE_CLEAN_FILE, index=False)
-    log.info("Saved cleaned queue (%d rows) to %s", len(df), QUEUE_CLEAN_FILE)
+    df.to_parquet(paths["clean"], index=False)
+    log.info("[%s] Saved cleaned queue (%d rows) to %s", iso.value, len(df), paths["clean"])
 
     return df
 
 
-def load_queue(force_refresh: bool = False) -> pd.DataFrame:
+def load_queue(iso: ISO, force_refresh: bool = False) -> pd.DataFrame:
     """
     Load cleaned queue from cache or re-download if needed.
     Main entry point for other modules.
     """
-    clean_path = Path(QUEUE_CLEAN_FILE)
+    clean_path = Path(_paths(iso)["clean"])
     if not force_refresh and clean_path.exists():
-        log.info("Loading queue from cache: %s", QUEUE_CLEAN_FILE)
-        return pd.read_parquet(QUEUE_CLEAN_FILE)
+        log.info("[%s] Loading queue from cache", iso.value)
+        return pd.read_parquet(clean_path)
 
-    raw = download_queue()
-    return clean_queue(raw)
+    raw = download_queue(iso)
+    return clean_queue(raw, iso)
 
 
-# ── Substation download ─────────────────────────────────────────────────────
+# ── Substation download ──────────────────────────────────────────────────────
 
-def download_substations(state: str = "TX") -> dict:
+def download_substations(iso: ISO) -> dict:
     """
-    Pull substation locations from HIFLD public API.
-    Returns GeoJSON dict and saves to data/geo/.
+    Pull substation GeoJSON from HIFLD for the ISO's state(s).
+    For PJM (multi-state), fetches all states in the footprint.
     """
-    log.info("Fetching HIFLD substations for state=%s", state)
+    cfg   = ISO_CONFIG[iso]
+    state = cfg["hifld_state"]
+    paths = _paths(iso)
+
+    PJM_STATES = "'PA','NJ','MD','DE','OH','IN','IL','MI','WI','VA','WV','KY','NC','DC'"
+
+    if state:
+        where = f"STATE='{state}'"
+    elif iso == ISO.PJM:
+        where = f"STATE IN ({PJM_STATES})"
+    else:
+        where = "1=1"
+
+    log.info("[%s] Fetching HIFLD substations (%s)", iso.value, where)
     params = {
-        "where":       f"STATE='{state}'",
-        "outFields":   "NAME,CITY,STATE,LATITUDE,LONGITUDE,MIN_VOLT,MAX_VOLT,LINES",
-        "f":           "geojson",
-        "resultRecordCount": 5000,
+        "where":              where,
+        "outFields":          "NAME,CITY,STATE,LATITUDE,LONGITUDE,MIN_VOLT,MAX_VOLT,LINES",
+        "f":                  "geojson",
+        "resultRecordCount":  5000,
     }
     response = requests.get(HIFLD_SUBSTATIONS_URL, params=params, timeout=30)
     response.raise_for_status()
 
     Path(GEO_DATA_DIR).mkdir(parents=True, exist_ok=True)
-    with open(SUBSTATIONS_FILE, "w") as f:
+    with open(paths["substations"], "w") as f:
         f.write(response.text)
-    log.info("Saved %s substations to %s", state, SUBSTATIONS_FILE)
+
+    feature_count = response.text.count('"type":"Feature"')
+    log.info("[%s] Saved %d substations to %s", iso.value, feature_count, paths["substations"])
 
     return response.json()
 
 
-# ── Quick summary ───────────────────────────────────────────────────────────
+# ── Summary ──────────────────────────────────────────────────────────────────
 
-def queue_summary(df: pd.DataFrame) -> None:
-    """Print a quick sanity-check summary of the loaded queue."""
-    print(f"\n{'='*50}")
-    print(f"  ERCOT Interconnection Queue Summary")
-    print(f"{'='*50}")
+def queue_summary(df: pd.DataFrame, iso: ISO) -> None:
+    iso_label = ISO_CONFIG[iso]["label"]
+    print(f"\n{'='*55}")
+    print(f"  {iso_label} Interconnection Queue Summary")
+    print(f"{'='*55}")
     print(f"  Total active projects : {len(df):,}")
     print(f"  Total capacity (MW)   : {df['capacity_mw'].sum():,.0f}")
     print(f"\n  Capacity by fuel type:")
@@ -135,14 +203,20 @@ def queue_summary(df: pd.DataFrame) -> None:
         .sort_values(ascending=False)
     )
     for fuel, mw in by_fuel.items():
-        print(f"    {fuel:<20} {mw:>10,.0f} MW")
+        print(f"    {fuel:<25} {mw:>10,.0f} MW")
     if "study_phase" in df.columns:
         print(f"\n  Projects by study phase:")
         for phase, count in df["study_phase"].value_counts().items():
-            print(f"    {str(phase):<30} {count:>5}")
-    print(f"{'='*50}\n")
+            print(f"    {str(phase):<35} {count:>5}")
+    print(f"{'='*55}\n")
 
 
 if __name__ == "__main__":
-    df = load_queue(force_refresh=True)
-    queue_summary(df)
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--iso", choices=["ERCOT", "CAISO", "PJM"], default="ERCOT")
+    args = parser.parse_args()
+
+    selected_iso = ISO[args.iso]
+    df = load_queue(selected_iso, force_refresh=True)
+    queue_summary(df, selected_iso)

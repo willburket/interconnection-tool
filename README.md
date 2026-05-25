@@ -1,88 +1,63 @@
-# ERCOT Interconnection Queue Analyzer
+# Interconnection Queue Analyzer — Multi-ISO
 
-Preliminary interconnection screening and queue analysis tool built on
-real ERCOT public data. Mirrors the first-pass workflow used by
-interconnection engineers when evaluating new project applications.
+Preliminary interconnection screening and queue analysis tool supporting
+ERCOT (Texas), CAISO (California), and PJM (Mid-Atlantic/Midwest).
 
 ## What it does
 
-- **Queue parsing** — pulls and cleans the live ERCOT Generator Interconnection
-  Status Report (updated weekly)
-- **Geographic clustering** — groups co-located projects using DBSCAN,
-  matching how ERCOT batches projects into cluster studies
-- **Network screening** — flags thermal overload risk and radial exposure
-  at candidate points of interconnection
-- **Interactive dashboard** — Streamlit UI with queue stats, cluster map,
-  and POI screening form
+- **Queue parsing** — pulls and cleans live interconnection queue reports for any supported ISO
+- **Geographic clustering** — groups co-located projects using DBSCAN, mirroring ISO cluster study batching
+- **Network screening** — flags thermal overload, radial exposure, and ISO-specific concerns
+- **ISO-specific intelligence** — CAISO offshore wind flags, ERCOT West Texas congestion alerts, PJM capacity market reminders
+- **Interactive dashboard** — Streamlit UI with ISO selector in the sidebar
 
 ## Setup
 
 ```bash
-# 1. Clone and install
-git clone <your-repo>
-cd interconnection-tool
 pip install -r requirements.txt
 
-# 2. Download HIFLD substation data (one-time)
-python -c "from src.ingest import download_substations; download_substations('TX')"
+# Download substations for your target ISO (one-time per ISO)
+python -c "from src.ingest import download_substations; from config import ISO; download_substations(ISO.CAISO)"
+python -c "from src.ingest import download_substations; from config import ISO; download_substations(ISO.ERCOT)"
 
-# 3. Pull the ERCOT queue
-python src/ingest.py
+# Pull queue data
+python src/ingest.py --iso CAISO
+python src/ingest.py --iso ERCOT
 
-# 4. Launch the dashboard
+# Launch
 streamlit run app/main.py
 ```
 
-## Data sources
+## Switching ISOs
 
-| Source | What it provides | URL |
-|--------|-----------------|-----|
-| ERCOT Interconnection Queue | Active project list, capacity, POI, study status | https://www.ercot.com/gridinfo/resource |
-| HIFLD Electric Substations | Substation locations, voltage, line count | https://hifld-geoplatform.opendata.arcgis.com |
+Select from the sidebar dropdown — ERCOT, CAISO, or PJM. All data is
+cached per ISO so switching is instant after the first load.
 
-Both are public and require no API key.
+## What changed from the ERCOT-only version
 
-## Project structure
+| File | Change |
+|------|--------|
+| `config.py` | ISO registry with per-ISO URLs, column maps, map centers, voltage classes |
+| `src/ingest.py` | ISO parameter on all functions; CAISO fuel type normalization |
+| `src/network.py` | 500kV voltage tier; CAISO offshore wind node detection |
+| `src/screening.py` | ISO-specific flag logic: CAISO offshore wind, ERCOT West TX congestion, PJM capacity market |
+| `app/main.py` | ISO selector in sidebar; CAISO offshore wind spotlight sections |
 
-```
-interconnection-tool/
-├── config.py              # all constants and thresholds
-├── requirements.txt
-├── data/
-│   ├── raw/               # downloaded ERCOT xlsx files
-│   ├── processed/         # cleaned parquet + cached graph
-│   └── geo/               # HIFLD GeoJSON files
-├── src/
-│   ├── ingest.py          # download + clean ERCOT queue
-│   ├── network.py         # NetworkX graph from HIFLD substations
-│   ├── cluster.py         # DBSCAN geographic clustering
-│   ├── screening.py       # thermal + radial screening logic
-│   └── visualize.py       # Folium map output
-├── app/
-│   ├── main.py            # Streamlit entry point
-│   └── pages/             # additional Streamlit pages
-└── tests/
-    ├── test_ingest.py
-    └── test_screening.py
-```
+`cluster.py` and `visualize.py` are unchanged — the core math
+doesn't care which ISO you're looking at.
 
-## Limitations
+## CAISO-specific notes
 
-ERCOT's public queue file does not include lat/lon coordinates for projects —
-it gives the substation (POI) name. To enable the geographic clustering page,
-you need to geocode those substation names against the HIFLD substation dataset.
-A fuzzy-match script for this is in `src/network.py::get_substation_info`.
-
-The thermal limits used in screening are estimated from voltage class, not
-actual line ratings. For production use, replace `_estimate_thermal_limit()`
-in `src/network.py` with real ratings from your network model or ERCOT's
-published facility data.
+- CAISO queue exceeds 100 GW as of 2025 — offshore wind and storage are the biggest categories
+- CAISO uses Full Capacity Deliverability Status (FCDS) vs. Energy Only (EO) — the screening tool flags this
+- Offshore wind POIs are flagged with California's preferred landing zones (Humboldt Bay, Morro Bay)
+- 500kV infrastructure is available at major CAISO substations — the tool flags when it's relevant
 
 ## Resume description
 
-> Built an interconnection queue analysis and preliminary screening tool using
-> live ERCOT public data. Automated queue ingestion and normalization,
-> geographic clustering of co-located projects using DBSCAN (mirroring ERCOT's
-> cluster study batching methodology), and first-pass thermal/radial screening
-> for candidate points of interconnection. Deployed as an interactive Streamlit
-> dashboard.
+> Built a multi-ISO interconnection queue analysis and screening tool
+> supporting ERCOT, CAISO, and PJM. Automated queue ingestion and normalization
+> across ISO-specific data formats, geographic clustering of co-located projects
+> (mirroring cluster study batching methodology), and preliminary thermal/radial
+> screening with ISO-specific intelligence including CAISO offshore wind flagging
+> and ERCOT congestion zone alerts. Deployed as an interactive Streamlit dashboard.
