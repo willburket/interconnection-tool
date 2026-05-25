@@ -17,12 +17,12 @@ ERCOT (Texas), CAISO (California), and PJM (Mid-Atlantic/Midwest).
 pip install -r requirements.txt
 
 # Download substations for your target ISO (one-time per ISO)
-python -c "from src.ingest import download_substations; from config import ISO; download_substations(ISO.CAISO)"
-python -c "from src.ingest import download_substations; from config import ISO; download_substations(ISO.ERCOT)"
+python3 -c "from src.ingest import download_substations; from config import ISO; download_substations(ISO.CAISO)"
+python3 -c "from src.ingest import download_substations; from config import ISO; download_substations(ISO.ERCOT)"
 
 # Pull queue data
-python src/ingest.py --iso CAISO
-python src/ingest.py --iso ERCOT
+python3 src/ingest.py --iso CAISO
+python3 src/ingest.py --iso ERCOT
 
 # Launch
 streamlit run app/main.py

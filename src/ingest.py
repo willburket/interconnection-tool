@@ -168,23 +168,42 @@ def download_substations(iso: ISO) -> dict:
         where = "1=1"
 
     log.info("[%s] Fetching HIFLD substations (%s)", iso.value, where)
-    params = {
-        "where":              where,
-        "outFields":          "NAME,CITY,STATE,LATITUDE,LONGITUDE,MIN_VOLT,MAX_VOLT,LINES",
-        "f":                  "geojson",
-        "resultRecordCount":  5000,
-    }
-    response = requests.get(HIFLD_SUBSTATIONS_URL, params=params, timeout=30)
-    response.raise_for_status()
 
+    # HIFLD caps resultRecordCount at 1000 — paginate until exhausted
+    PAGE_SIZE = 1000
+    all_features = []
+    offset = 0
+
+    while True:
+        params = {
+            "where":             where,
+            "outFields":         "NAME,CITY,STATE,LATITUDE,LONGITUDE,MIN_VOLT,MAX_VOLT,LINES",
+            "f":                 "geojson",
+            "resultRecordCount": PAGE_SIZE,
+            "resultOffset":      offset,
+        }
+        response = requests.get(HIFLD_SUBSTATIONS_URL, params=params, timeout=30)
+        response.raise_for_status()
+
+        page = response.json()
+        features = page.get("features", [])
+        all_features.extend(features)
+        log.info("[%s] Fetched %d substations (offset %d)", iso.value, len(features), offset)
+
+        # HIFLD signals last page when it returns fewer records than requested
+        if len(features) < PAGE_SIZE:
+            break
+        offset += PAGE_SIZE
+
+    geojson = {"type": "FeatureCollection", "features": all_features}
+
+    import json
     Path(GEO_DATA_DIR).mkdir(parents=True, exist_ok=True)
     with open(paths["substations"], "w") as f:
-        f.write(response.text)
+        json.dump(geojson, f)
 
-    feature_count = response.text.count('"type":"Feature"')
-    log.info("[%s] Saved %d substations to %s", iso.value, feature_count, paths["substations"])
-
-    return response.json()
+    log.info("[%s] Saved %d total substations to %s", iso.value, len(all_features), paths["substations"])
+    return geojson
 
 
 # ── Summary ──────────────────────────────────────────────────────────────────
