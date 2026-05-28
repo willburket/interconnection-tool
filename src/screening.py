@@ -1,5 +1,4 @@
-# src/screening.py — preliminary interconnection screening
-# Updated: CAISO offshore wind flagging, 500kV voltage class, multi-ISO support
+# src/screening.py — preliminary CAISO interconnection screening
 
 from dataclasses import dataclass, field
 from enum import Enum
@@ -9,10 +8,7 @@ import logging
 import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
-from config import (
-    ISO, ISO_CONFIG,
-    THERMAL_WARNING_PCT, THERMAL_HIGH_PCT, MIN_TRANSMISSION_PATHS,
-)
+from config import THERMAL_WARNING_PCT, THERMAL_HIGH_PCT, MIN_TRANSMISSION_PATHS
 
 log = logging.getLogger(__name__)
 
@@ -26,23 +22,21 @@ class RiskLevel(str, Enum):
 
 @dataclass
 class ScreeningResult:
-    substation:           str
-    project_mw:           float
-    iso:                  ISO = ISO.ERCOT
-    fuel_type:            str = "Unknown"
-    risk_level:           RiskLevel = RiskLevel.UNKNOWN
-    thermal_limit_mw:     float = 0.0
-    existing_queue_mw:    float = 0.0
-    total_proposed_mw:    float = 0.0
-    utilization_pct:      float = 0.0
-    transmission_paths:   int   = 0
-    flags:                list  = field(default_factory=list)
-    recommendations:      list  = field(default_factory=list)
+    substation:         str
+    project_mw:         float
+    fuel_type:          str   = "Unknown"
+    risk_level:         RiskLevel = RiskLevel.UNKNOWN
+    thermal_limit_mw:   float = 0.0
+    existing_queue_mw:  float = 0.0
+    total_proposed_mw:  float = 0.0
+    utilization_pct:    float = 0.0
+    transmission_paths: int   = 0
+    flags:              list  = field(default_factory=list)
+    recommendations:    list  = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
             "substation":         self.substation,
-            "iso":                self.iso.value,
             "fuel_type":          self.fuel_type,
             "project_mw":         self.project_mw,
             "risk_level":         self.risk_level.value,
@@ -57,9 +51,9 @@ class ScreeningResult:
 
     def __str__(self) -> str:
         lines = [
-            f"\n{'='*58}",
-            f"  [{self.iso.value}] Screening: {self.substation}",
-            f"{'='*58}",
+            f"\n{'='*55}",
+            f"  [CAISO] Screening: {self.substation}",
+            f"{'='*55}",
             f"  Fuel type          : {self.fuel_type}",
             f"  Proposed capacity  : {self.project_mw:,.0f} MW",
             f"  Thermal limit      : {self.thermal_limit_mw:,.0f} MW",
@@ -77,7 +71,7 @@ class ScreeningResult:
             lines.append("\n  ✓  Recommendations:")
             for rec in self.recommendations:
                 lines.append(f"     • {rec}")
-        lines.append(f"{'='*58}\n")
+        lines.append(f"{'='*55}\n")
         return "\n".join(lines)
 
 
@@ -85,23 +79,20 @@ def screen_interconnection_point(
     substation_name: str,
     project_mw:      float,
     G:               nx.Graph,
-    iso:             ISO = ISO.ERCOT,
     fuel_type:       str = "Unknown",
 ) -> ScreeningResult:
     """
-    Run a preliminary screening check for a new interconnection request.
+    Run a preliminary CAISO interconnection screening check.
 
     Checks:
       1. Thermal utilization — existing queue + proposed vs. rated limit
       2. Network radialness — number of transmission paths
-      3. Voltage class suitability for the project size
-      4. ISO-specific flags — CAISO offshore wind, CAISO 500kV considerations,
-         PJM capacity market implications
+      3. Voltage class suitability for project size
+      4. CAISO-specific flags — offshore wind, FCDS/EO, 500 kV, queue backlog
     """
     result = ScreeningResult(
         substation=substation_name,
         project_mw=project_mw,
-        iso=iso,
         fuel_type=fuel_type,
     )
     name_upper = substation_name.upper().strip()
@@ -112,7 +103,7 @@ def screen_interconnection_point(
         if not matches:
             result.flags.append(
                 f"Substation '{substation_name}' not found in network model. "
-                "Verify the POI name against the ISO's published substation list."
+                "Verify the POI name against the CAISO substation list."
             )
             result.risk_level = RiskLevel.UNKNOWN
             return result
@@ -148,7 +139,7 @@ def screen_interconnection_point(
                 "Detailed power flow study required to confirm headroom."
             )
             result.recommendations.append(
-                f"Consider requesting a pre-application meeting with {iso.value}."
+                "Consider requesting a pre-application meeting with CAISO."
             )
         else:
             result.recommendations.append(
@@ -165,7 +156,7 @@ def screen_interconnection_point(
     if n_paths < MIN_TRANSMISSION_PATHS:
         result.flags.append(
             f"Only {n_paths} transmission path(s) detected. "
-            "Radial or weakly-meshed connections may require expensive reactive support "
+            "Radial connections may require expensive reactive support "
             "and additional stability studies."
         )
         result.recommendations.append(
@@ -188,13 +179,14 @@ def screen_interconnection_point(
                 "a lower-voltage interconnection could reduce cost."
             )
 
-    # ── ISO-specific flags ───────────────────────────────────────────────────
-    _apply_iso_flags(result, node, iso, fuel_type)
+    # ── CAISO-specific flags ─────────────────────────────────────────────────
+    _caiso_flags(result, node, fuel_type)
 
     # ── Overall risk rating ──────────────────────────────────────────────────
-    high_count = sum(1 for f in result.flags if any(
-        kw in f.upper() for kw in ["HIGH", "RADIAL", "OVERSIZED"]
-    ))
+    high_count = sum(
+        1 for f in result.flags
+        if any(kw in f.upper() for kw in ["HIGH", "RADIAL", "OVERSIZED", "OFFSHORE"])
+    )
     med_count = sum(1 for f in result.flags if "MODERATE" in f.upper())
 
     if high_count >= 2:
@@ -209,103 +201,47 @@ def screen_interconnection_point(
     return result
 
 
-def _apply_iso_flags(
-    result:    ScreeningResult,
-    node:      dict,
-    iso:       ISO,
-    fuel_type: str,
-) -> None:
-    """Apply ISO-specific screening flags."""
-
-    if iso == ISO.CAISO:
-        _caiso_flags(result, node, fuel_type)
-    elif iso == ISO.ERCOT:
-        _ercot_flags(result, node, fuel_type)
-    elif iso == ISO.PJM:
-        _pjm_flags(result, node, fuel_type)
-
-
 def _caiso_flags(result: ScreeningResult, node: dict, fuel_type: str) -> None:
-    """CAISO-specific screening flags."""
+    """Apply CAISO-specific screening flags."""
 
-    # Offshore wind — California's fastest-growing interconnection category
+    # Offshore wind — no existing transmission infrastructure
     if fuel_type.lower() == "offshore wind":
         result.flags.append(
-            "OFFSHORE WIND: California has no existing offshore wind "
-            "transmission infrastructure. Expect CPUC/CAISO coordinated "
-            "transmission planning studies and potential new 500kV collector lines."
+            "OFFSHORE WIND: California has no existing offshore wind transmission "
+            "infrastructure. Expect CPUC/CAISO coordinated planning studies and "
+            "potential new 500 kV collector lines."
         )
         result.recommendations.append(
-            "Monitor CAISO's Offshore Wind Integration Study and "
-            "CPUC's Integrated Resource Planning (IRP) docket for cost allocation rules."
+            "Monitor CAISO's Offshore Wind Integration Study and CPUC's IRP docket "
+            "for cost allocation rules."
         )
         result.recommendations.append(
-            "Consider Humboldt Bay or Morro Bay POI areas per CAISO's "
-            "preferred offshore wind landing zones."
+            "Consider Humboldt Bay or Morro Bay POI areas per CAISO's preferred "
+            "offshore wind landing zones."
         )
 
-    # 500kV consideration — unique to CAISO vs ERCOT
+    # 500 kV recommendation for large projects
     max_volt = node.get("max_volt", 0)
     if max_volt >= 500 and result.project_mw >= 500:
         result.recommendations.append(
-            f"500kV POI available. Large projects (≥500 MW) in CAISO often "
-            "benefit from 500kV interconnection to minimize losses and upgrade costs."
+            "500 kV POI available. Large projects (≥500 MW) in CAISO often benefit "
+            "from 500 kV interconnection to minimize losses and upgrade costs."
         )
 
-    # CAISO's large queue backlog — context flag
+    # Queue backlog context
     result.recommendations.append(
-        "CAISO queue currently exceeds 100 GW. Cluster study timelines "
-        "have been 3–5 years — factor this into project schedule."
+        "CAISO queue currently exceeds 100 GW. Cluster study timelines have been "
+        "3–5 years — factor this into your project schedule."
     )
 
-    # Deliverability vs. energy-only
+    # Deliverability flag — applies to every project
     result.flags.append(
-        "CAISO NOTE: Confirm whether project is seeking Full Capacity "
-        "Deliverability Status (FCDS) or Energy Only (EO). "
-        "FCDS requires additional network upgrade cost allocation."
-    )
-
-
-def _ercot_flags(result: ScreeningResult, node: dict, fuel_type: str) -> None:
-    """ERCOT-specific screening flags."""
-
-    # West Texas congestion — common pain point
-    state = node.get("state", "")
-    city  = str(node.get("city", "")).upper()
-    WEST_TX_CITIES = {"MIDLAND", "ODESSA", "SAN ANGELO", "ABILENE", "SWEETWATER", "SNYDER"}
-    if any(c in city for c in WEST_TX_CITIES):
-        result.flags.append(
-            "West Texas POI: high transmission congestion zone. "
-            "Expect significant curtailment risk and potential high network upgrade costs."
-        )
-        result.recommendations.append(
-            "Review ERCOT's Competitive Renewable Energy Zone (CREZ) transmission "
-            "capacity data before committing to this POI."
-        )
-
-    # ERCOT weather risk (post-Uri)
-    if fuel_type.lower() in ("gas", "nuclear"):
-        result.recommendations.append(
-            "ERCOT requires winterization compliance under SB 3 (2021) "
-            "for thermal generators. Confirm weatherization plan is in scope."
-        )
-
-
-def _pjm_flags(result: ScreeningResult, node: dict, fuel_type: str) -> None:
-    """PJM-specific screening flags."""
-
-    result.recommendations.append(
-        "PJM operates a capacity market (RPM). Confirm whether project "
-        "will participate — capacity revenues significantly affect project economics."
-    )
-    result.recommendations.append(
-        "PJM's FERC Order 2023 compliance transition is ongoing. "
-        "Study timelines are in flux — confirm current cluster cycle dates."
+        "Confirm whether project is seeking Full Capacity Deliverability Status (FCDS) "
+        "or Energy Only (EO). FCDS requires additional network upgrade cost allocation."
     )
 
 
 def _voltage_to_mw_range(voltage_kv: float) -> tuple[float, float]:
-    """Typical project size ranges by voltage class."""
     if voltage_kv >= 500:
         return (500, 5000)
     elif voltage_kv >= 345:
@@ -324,12 +260,11 @@ def batch_screen(
     substation_names: list[str],
     project_mw:       float,
     G:                nx.Graph,
-    iso:              ISO = ISO.ERCOT,
     fuel_type:        str = "Unknown",
 ) -> list[ScreeningResult]:
     """Screen multiple candidate POIs for the same project."""
     results = [
-        screen_interconnection_point(s, project_mw, G, iso, fuel_type)
+        screen_interconnection_point(s, project_mw, G, fuel_type)
         for s in substation_names
     ]
     results.sort(key=lambda r: (r.risk_level.value, -r.utilization_pct))
