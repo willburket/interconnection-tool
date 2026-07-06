@@ -26,4 +26,5 @@ Thumbs.db
 .idea/
 
 #test report
-publicqueuereport.xlsx
+/src/publicqueuereport.xlsx
+cluster-15-interconnection-requests.xlsx
