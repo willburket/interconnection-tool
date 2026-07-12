@@ -6,6 +6,8 @@ import pandas as pd
 from io import BytesIO
 from pathlib import Path
 import logging
+import geopandas as gpd
+import json
 
 import sys
 sys.path.append(str(Path(__file__).parent.parent))
@@ -85,60 +87,42 @@ def load_queue(force_refresh: bool = False) -> pd.DataFrame:
     
     try:
         df = pd.read_excel(excel_path, skiprows=3)
-        # cols_lower = " ".join(str(c).lower() for c in df.columns)
-        # print(df.columns)
-        # if any(k in cols_lower for k in ["Net MWs to Grid", "fuel", "Project Name"]):            # FIX FUEL
-
         return clean_queue(df)
     except Exception:
         print("error loading queue")
-    # return clean_queue(pd.read_excel(excel_path))
     return
 
 
 # ── Substation download ──────────────────────────────────────────────────────
 
-def download_substations() -> dict:
+def load_substations() -> dict:
     """
-    Pull California substation locations from HIFLD public API.
-    Paginates in chunks of 1000 (HIFLD's max page size).
+    Load substation data from a local GeoPackage file.
+    Saves as GeoJSON to data/geo/ for use by network.py.
     """
-    where     = f"STATE='{HIFLD_STATE}'"
-    PAGE_SIZE = 1000
-    all_features = []
-    offset = 0
 
-    log.info("Fetching HIFLD substations for CA")
+    gdf = gpd.read_file("src/electric_substation_hifld_v4.gpkg")
 
-    while True:
-        params = {
-            "where":             where,
-            "outFields":         "NAME,CITY,STATE,LATITUDE,LONGITUDE,MIN_VOLT,MAX_VOLT,LINES",
-            "f":                 "geojson",
-            "resultRecordCount": PAGE_SIZE,
-            "resultOffset":      offset,
-        }
-        response = requests.get(HIFLD_SUBSTATIONS_URL, params=params, timeout=30)
-        response.raise_for_status()
+    # print(gdf.columns.tolist())     # print columns 
+    
+    # delete non-cali substations and unneeded columns
+    gdf = gdf[gdf['state'] == 'CA']
+    columns = ['id', 'name', 'city', 'state', 'zip', 'type', 'status', 'county', 'latitude', 'longitude', 'lines', 'max_volt', 'min_volt',]
+    gdf = gdf.loc[:, columns]
 
-        page     = response.json()
-        features = page.get("features", [])
-        all_features.extend(features)
-        log.info("Fetched %d substations (offset %d)", len(features), offset)
+    # 1. Convert standard DataFrame to a GeoDataFrame
+    gdf = gpd.GeoDataFrame(
+        gdf, 
+        geometry=gpd.points_from_xy(gdf['longitude'], gdf['latitude']),
+        crs="EPSG:4326"  # Standard WGS84 coordinate system used by GeoJSON
+    )
 
-        if len(features) < PAGE_SIZE:
-            break
-        offset += PAGE_SIZE
-
-    geojson = {"type": "FeatureCollection", "features": all_features}
-
+    # Save as GeoJSON so network.py can read it as before
     Path(GEO_DATA_DIR).mkdir(parents=True, exist_ok=True)
-    with open(SUBSTATIONS_FILE, "w") as f:
-        json.dump(geojson, f)
+    gdf.to_file(SUBSTATIONS_FILE, driver="GeoJSON")
 
-    log.info("Saved %d total substations to %s", len(all_features), SUBSTATIONS_FILE)
-    return geojson
-
+    log.info("Saved %d substations from %s to %s", len(gdf),"src/electric_substation_hifld_v4.gpkg", SUBSTATIONS_FILE)
+    return json.loads(gdf.to_json())
 
 # ── Summary ──────────────────────────────────────────────────────────────────
 

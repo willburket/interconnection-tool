@@ -3,14 +3,13 @@
 # ── CAISO data sources ──────────────────────────────────────────────────────
 # Direct Excel download — check caiso.com/generation if this link goes stale
 CAISO_QUEUE_URL = (
-    # "https://www.caiso.com/Documents/GeneratorInterconnectionQueueReport.xlsx"
     "https://www.caiso.com/library/public-queue-report"
     
 )
 
 # HIFLD substations REST API (public, no key needed)
 HIFLD_SUBSTATIONS_URL = (
-    "https://services1.arcgis.com/Hp6G80Pky0om7QvQ/arcgis/rest/services/Electric_Substations/FeatureServer/0/query"
+    "https://services.arcgis.com/njFNhDsUCentVYJW/ArcGIS/rest/services/Substations/FeatureServer/0/query"
 )
 HIFLD_STATE = "CA"
 

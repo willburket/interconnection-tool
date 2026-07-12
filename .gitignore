@@ -28,3 +28,10 @@ Thumbs.db
 #test report
 /src/publicqueuereport.xlsx
 cluster-15-interconnection-requests.xlsx
+
+#substation dataset 
+/electric_substation_hifld_v4
+
+src/electric_substation_hifld_v4.gpkg
+data
+src/data/processed/caiso_queue_clean.parquet

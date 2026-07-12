@@ -20,7 +20,7 @@ def build_graph() -> nx.Graph:
     Nodes = substations. Edges = inferred from shared voltage levels and proximity.
     """
     if not Path(SUBSTATIONS_FILE).exists():
-        log.error("Substation file not found: %s — run download_substations() first", SUBSTATIONS_FILE)
+        log.error("Substation file not found: %s — run load_substations() first", SUBSTATIONS_FILE)
         return nx.Graph()
 
     with open(SUBSTATIONS_FILE) as f:
@@ -28,21 +28,26 @@ def build_graph() -> nx.Graph:
 
     G = nx.Graph()
 
-    for feature in data["features"]:
+    for feature in data:
         props  = feature["properties"]
-        coords = feature["geometry"]["coordinates"]
-        name   = props.get("NAME", "UNKNOWN").upper().strip()
-        max_volt = props.get("MAX_VOLT", 0) or 0
+        # coords = feature["geometry"]["coordinates"]
+        name = feature["name"].upper().strip()
+        lat = feature["latitude"]
+        lon = feature["longitude"]
+        max_volt = feature["max_volt"]
+        min_volt = feature["min_volt"]
+        lines = feature["lines"],
+
 
         G.add_node(
             name,
-            name=props.get("NAME"),
-            city=props.get("CITY"),
-            lat=coords[1],
-            lon=coords[0],
-            min_volt=props.get("MIN_VOLT", 0),
+            name=name,
+            # city=props.get("CITY"),
+            lat= lat,
+            lon= lon,
+            min_volt= min_volt,
             max_volt=max_volt,
-            lines=props.get("LINES", 0) or 0,
+            lines= lines,
             queued_capacity_mw=0.0,
             thermal_limit_mw=_estimate_thermal_limit(max_volt),
         )

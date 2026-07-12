@@ -33,7 +33,7 @@ cd interconnection-tool
 pip install -r requirements.txt
 
 # 2. Download California substation data (one-time)
-python3 -c "from src.ingest import download_substations; download_substations()"
+python3 -c "from src.ingest import load_substations; load_substations()"
 
 # 3. Pull the CAISO queue
 python3 src/ingest.py
@@ -46,14 +46,7 @@ streamlit run app/main.py
 
 ## Data sources
 
-| Source | What it provides | Access |
-|--------|-----------------|--------|
-| CAISO Generator Interconnection Queue | Active projects, capacity, POI, study phase | [caiso.com/generation](https://www.caiso.com/generation/Pages/GeneratingFacilities/Default.aspx) |
-| HIFLD Electric Substations | Substation locations, voltage class, line count | [HIFLD Open Data](https://hifld-geoplatform.opendata.arcgis.com) |
 
-Both are public and require no API key.
-
----
 
 ## Project structure
 
@@ -113,6 +106,4 @@ pytest tests/
 
 ---
 
-## Resume description
 
-> Built a CAISO interconnection queue analysis and preliminary screening tool using live public data. Automated queue ingestion and normalization across CAISO's inconsistent fuel type and column naming conventions, geographic clustering of co-located projects using DBSCAN (mirroring CAISO's cluster study batching methodology), and first-pass thermal and radial screening for candidate points of interconnection with CAISO-specific intelligence including offshore wind infrastructure flagging, FCDS/Energy Only deliverability callouts, and 500 kV POI guidance. Deployed as an interactive Streamlit dashboard.
