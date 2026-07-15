@@ -48,6 +48,7 @@ def get_graph():
     return G
 
 df = get_queue(force=refresh)
+print(df.head())
 G  = get_graph()
 G  = annotate_queue_capacity(G, df)
 

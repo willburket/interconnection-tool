@@ -28,15 +28,20 @@ def build_graph() -> nx.Graph:
 
     G = nx.Graph()
 
-    for feature in data:
-        props  = feature["properties"]
+
+    # print(data['features'][0])
+
+
+    for feature in data['features']:
+        properties = feature['properties']
+        # props  = feature["properties"]
         # coords = feature["geometry"]["coordinates"]
-        name = feature["name"].upper().strip()
-        lat = feature["latitude"]
-        lon = feature["longitude"]
-        max_volt = feature["max_volt"]
-        min_volt = feature["min_volt"]
-        lines = feature["lines"],
+        name = properties["name"].upper().strip()
+        lat = properties["latitude"]
+        lon = properties["longitude"]
+        max_volt = properties["max_volt"]
+        min_volt = properties["min_volt"]
+        lines = properties["lines"],
 
 
         G.add_node(
@@ -80,12 +85,12 @@ def _estimate_thermal_limit(voltage_kv: float) -> float:
 
 def annotate_queue_capacity(G: nx.Graph, queue_df: pd.DataFrame) -> nx.Graph:
     """Sum queued MW per substation from the queue and write onto graph nodes."""
-    if "substation_name" not in queue_df.columns:
+    if "name" not in queue_df.columns:
         log.warning("Queue data has no substation_name column — skipping annotation")
         return G
 
     queue_by_sub = (
-        queue_df.groupby("substation_name")["capacity_mw"]
+        queue_df.groupby("name")["net mws to grid"]
         .sum()
         .to_dict()
     )

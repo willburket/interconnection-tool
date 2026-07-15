@@ -27,6 +27,7 @@ Thumbs.db
 
 #test report
 /src/publicqueuereport.xlsx
+publicqueuereport.xlsx
 cluster-15-interconnection-requests.xlsx
 
 #substation dataset 
