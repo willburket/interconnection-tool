@@ -48,7 +48,7 @@ def get_graph():
     return G
 
 df = get_queue(force=refresh)
-print(df.head())
+
 G  = get_graph()
 G  = annotate_queue_capacity(G, df)
 
@@ -60,6 +60,8 @@ if page == "Queue Overview":
     st.title("CAISO Interconnection Queue")
     st.caption(f"{len(df):,} active projects · source: CAISO Generator Interconnection Queue Report")
 
+    print(df.columns.to_list())
+
     st.info(
         "🌊 **California queue note:** CAISO currently has over 100 GW of projects "
         "in queue — more than double the state's existing generating capacity. "
@@ -69,10 +71,10 @@ if page == "Queue Overview":
     # KPI row
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Total Projects",      f"{len(df):,}")
-    c2.metric("Total Capacity (MW)", f"{df['capacity_mw'].sum():,.0f}")
+    c2.metric("Total Capacity (MW)", f"{df['net mws to grid'].sum():,.0f}")
     c3.metric(
         "Solar + Storage + Offshore (MW)",
-        f"{df[df['fuel_type'].isin(['Solar','Battery','Offshore Wind'])]['capacity_mw'].sum():,.0f}"
+        f"{df[df['fuel-1'].isin(['solar','battery','wind turbine'])]['net mws to grid'].sum():,.0f}"       # is there a way to specify offshore?
     )
     c4.metric(
         "Avg Days in Queue",
@@ -85,11 +87,11 @@ if page == "Queue Overview":
     with col_l:
         st.subheader("Capacity by fuel type (MW)")
         fuel_summary = (
-            df.groupby("fuel_type")["capacity_mw"]
+            df.groupby("fuel-1")["net mws to grid"]
             .sum().sort_values(ascending=False)
-            .reset_index().rename(columns={"capacity_mw": "Total MW"})
+            .reset_index().rename(columns={"net mws to grid": "Total MW"})
         )
-        st.bar_chart(fuel_summary.set_index("fuel_type"))
+        st.bar_chart(fuel_summary.set_index("fuel-1"))
 
     with col_r:
         st.subheader("Projects by study phase")
@@ -99,19 +101,19 @@ if page == "Queue Overview":
             st.dataframe(phase_counts, use_container_width=True, hide_index=True)
 
     # Offshore wind spotlight
-    offshore = df[df["fuel_type"] == "Offshore Wind"]
+    offshore = df[df["fuel-1"] == "wind turbine"]
     if not offshore.empty:
         st.divider()
-        st.subheader(f"🌊 Offshore wind — {len(offshore)} projects, {offshore['capacity_mw'].sum():,.0f} MW")
+        st.subheader(f"🌊 Offshore wind — {len(offshore)} projects, {offshore['net mws to grid'].sum():,.0f} MW")
         st.dataframe(
-            offshore[["project_name", "capacity_mw", "substation_name",
-                       "study_phase", "days_in_queue"]].sort_values("capacity_mw", ascending=False),
+            offshore[["name", "net mws to grid", "station or transmission line",
+                       "study_phase", "days_in_queue"]].sort_values("net mws to grid", ascending=False),
             use_container_width=True, hide_index=True,
         )
 
     st.divider()
     st.subheader("Full queue")
-    st.dataframe(df.sort_values("capacity_mw", ascending=False), use_container_width=True, hide_index=True)
+    st.dataframe(df.sort_values("net mws to grid", ascending=False), use_container_width=True, hide_index=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -124,7 +126,7 @@ elif page == "Geographic Clusters":
         "mirroring how CAISO batches projects into cluster studies."
     )
 
-    if "latitude" not in df.columns or "longitude" not in df.columns:
+    if "lat" not in df.columns or "lon" not in df.columns:
         st.warning(
             "CAISO's public queue file doesn't include lat/lon coordinates. "
             "You'll need to geocode substation names against the HIFLD substation file. "

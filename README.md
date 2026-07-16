@@ -28,7 +28,7 @@ Streamlit UI with queue stats, offshore wind spotlight, geographic cluster drill
 
 ```bash
 # 1. Clone the repo and install dependencies
-git clone https://github.com/[your-handle]/interconnection-tool.git
+git clone https://github.com/willburket/interconnection-tool.git
 cd interconnection-tool
 pip install -r requirements.txt
 
@@ -45,6 +45,12 @@ streamlit run app/main.py
 ---
 
 ## Data sources
+
+Queue Report Link: 
+https://www.caiso.com/library/public-queue-report
+
+Substation DataSet Link (Download 'Electrical Substations' layer):
+gem.anl.gov/tool 
 
 
 
@@ -94,7 +100,6 @@ Unlike ERCOT (which tops out at 345 kV), CAISO has significant 500 kV transmissi
 
 - CAISO's public queue file does not include lat/lon coordinates. The geographic clustering page requires geocoding substation names against the HIFLD dataset. A fuzzy-match utility is available in `src/network.py::get_substation_info()`.
 - Thermal limits are estimated from voltage class, not actual line ratings. Replace `_estimate_thermal_limit()` in `src/network.py` with real ratings from CAISO's published facility data for production use.
-- The CAISO queue Excel URL changes periodically. If `download_queue()` fails with a 404, check [caiso.com/generation](https://www.caiso.com/generation/Pages/GeneratingFacilities/Default.aspx) for the current link and update `CAISO_QUEUE_URL` in `config.py`.
 
 ---
 

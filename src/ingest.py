@@ -64,6 +64,9 @@ def clean_queue(df: pd.DataFrame) -> pd.DataFrame:
     if "interconnection request receive date" in df.columns:
         df["days_in_queue"] = (pd.Timestamp.today() - df["interconnection request receive date"]).dt.days    
 
+    # df = geocode_substations(df, "src/electric_substation_hifld_v4.gpkg")  # update path as needed
+
+
     Path(PROCESSED_DATA_DIR).mkdir(parents=True, exist_ok=True)
 
     for col in df.columns:
@@ -123,6 +126,42 @@ def load_substations() -> dict:
 
     log.info("Saved %d substations from %s to %s", len(gdf),"src/electric_substation_hifld_v4.gpkg", SUBSTATIONS_FILE)
     return json.loads(gdf.to_json())
+
+def geocode_substations(df: pd.DataFrame, gpkg_path: str, layer: str = None) -> pd.DataFrame:
+    """
+    Match queue projects to substation coordinates from the GeoPackage.
+    Adds latitude and longitude columns to the queue DataFrame.
+    """
+    import geopandas as gpd
+
+    if layer:
+        gdf = gpd.read_file(gpkg_path, layer=layer)
+    else:
+        gdf = gpd.read_file(gpkg_path)
+
+    if gdf.crs and gdf.crs.to_epsg() != 4326:
+        gdf = gdf.to_crs(epsg=4326)
+
+    # Build name -> (lat, lon) lookup from your substation dataset
+    # Update "NAME" to whatever your GeoPackage calls the substation name column
+    sub_coords = {
+        row["NAME"].upper().strip(): (row.geometry.y, row.geometry.x)
+        for _, row in gdf.iterrows()
+        if row.geometry is not None
+    }
+
+    def get_coords(substation_name):
+        name = str(substation_name).upper().strip()
+        return sub_coords.get(name, (None, None))
+
+    df[["lat", "lon"]] = df["station or transmission line"].apply(
+        lambda x: pd.Series(get_coords(x))
+    )
+
+    matched = df["lat"].notna().sum()
+    log.info("Geocoded %d of %d projects (%.0f%%)", matched, len(df), matched / len(df) * 100)
+
+    return df
 
 # ── Summary ──────────────────────────────────────────────────────────────────
 
