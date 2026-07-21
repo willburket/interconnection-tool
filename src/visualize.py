@@ -83,7 +83,7 @@ def queue_map(
                          f'background:#1e293b;color:#fff;padding:2px 6px;'
                          f'border-radius:4px;white-space:nowrap;">'
                          f'{c["project_count"]} projects<br>'
-                         f'{c["total_capacity_mw"]:,.0f} MW</div>'
+                         f'{c["net mws to grid"]:,.0f} MW</div>'
                 ),
                 tooltip=f"Cluster {c['cluster']}: {c['total_capacity_mw']:,.0f} MW",
             ).add_to(cg)

@@ -60,7 +60,7 @@ if page == "Queue Overview":
     st.title("CAISO Interconnection Queue")
     st.caption(f"{len(df):,} active projects · source: CAISO Generator Interconnection Queue Report")
 
-    print(df.columns.to_list())
+
 
     st.info(
         "🌊 **California queue note:** CAISO currently has over 100 GW of projects "
@@ -73,8 +73,8 @@ if page == "Queue Overview":
     c1.metric("Total Projects",      f"{len(df):,}")
     c2.metric("Total Capacity (MW)", f"{df['net mws to grid'].sum():,.0f}")
     c3.metric(
-        "Solar + Storage + Offshore (MW)",
-        f"{df[df['fuel-1'].isin(['solar','battery','wind turbine'])]['net mws to grid'].sum():,.0f}"       # is there a way to specify offshore?
+        "Solar + Storage + Wind (MW)",
+        f"{df[df['fuel-1'].isin(['Solar','Battery','Wind Turbine'])]['mw-1'].sum():,.0f}"       
     )
     c4.metric(
         "Avg Days in Queue",
@@ -98,7 +98,7 @@ if page == "Queue Overview":
         if "study_phase" in df.columns:
             phase_counts = df["study_phase"].value_counts().reset_index()
             phase_counts.columns = ["Study Phase", "Count"]
-            st.dataframe(phase_counts, use_container_width=True, hide_index=True)
+            st.dataframe(phase_counts, width="content", hide_index=True)
 
     # Offshore wind spotlight
     offshore = df[df["fuel-1"] == "wind turbine"]
@@ -108,12 +108,12 @@ if page == "Queue Overview":
         st.dataframe(
             offshore[["name", "net mws to grid", "station or transmission line",
                        "study_phase", "days_in_queue"]].sort_values("net mws to grid", ascending=False),
-            use_container_width=True, hide_index=True,
+            width=True, hide_index=True,
         )
 
     st.divider()
     st.subheader("Full queue")
-    st.dataframe(df.sort_values("net mws to grid", ascending=False), use_container_width=True, hide_index=True)
+    st.dataframe(df.sort_values("net mws to grid", ascending=False), width="content", hide_index=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -141,7 +141,7 @@ elif page == "Geographic Clusters":
         st.stop()
 
     st.subheader(f"Top congestion clusters ({len(cluster_summary)} total)")
-    st.dataframe(top_congestion_clusters(cluster_summary), use_container_width=True, hide_index=True)
+    st.dataframe(top_congestion_clusters(cluster_summary), width='content', hide_index=True)
 
     # Offshore wind POI callout
     ow_nodes = offshore_wind_candidates(G)
@@ -163,7 +163,7 @@ elif page == "Geographic Clusters":
     )
     st.dataframe(
         df_clustered[df_clustered["cluster"] == selected],
-        use_container_width=True, hide_index=True,
+        width='content', hide_index=True,
     )
 
 
@@ -237,4 +237,4 @@ elif page == "Screening Tool":
                 ["substation", "risk_level", "utilization_pct",
                  "thermal_limit_mw", "existing_queue_mw", "transmission_paths"]
             ]
-            st.dataframe(comparison, use_container_width=True, hide_index=True)
+            st.dataframe(comparison, width="content", hide_index=True)
