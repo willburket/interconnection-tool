@@ -32,6 +32,8 @@ def cluster_projects(
     """
     coords_df = df.dropna(subset=[lat_col, lon_col]).copy()
 
+    print(df.head())
+
     if len(coords_df) == 0:
         log.warning("No rows with valid coordinates — returning empty clusters")
         return df.assign(cluster=-1), pd.DataFrame()
@@ -63,8 +65,8 @@ def cluster_projects(
 
     agg = {
         "project_count":      ("project_name", "count"),
-        "total_capacity_mw":  ("capacity_mw",  "sum"),
-        "avg_capacity_mw":    ("capacity_mw",  "mean"),
+        "total_capacity_mw":  ("net mws to grid",  "sum"),
+        "avg_capacity_mw":    ("net mws to grid",  "mean"),
         "center_lat":         (lat_col,         "mean"),
         "center_lon":         (lon_col,         "mean"),
     }
@@ -86,7 +88,7 @@ def cluster_projects(
         "%d noise points.",
         len(cluster_summary),
         clustered["project_id"].nunique() if "project_id" in clustered.columns else len(clustered),
-        clustered["capacity_mw"].sum(),
+        clustered["net mws to grid"].sum(),
         noise_count,
     )
 

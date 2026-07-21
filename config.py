@@ -29,7 +29,7 @@ COLUMN_MAP = {
     "project name":                 "project_name",
     "fuel type":                    "fuel_type",
     "resource type":                "fuel_type",
-    "capacity (mw)":                "capacity_mw",
+    "capacity (mw)":                "net mws to grid",
     "county":                       "county",
     "point of interconnection":     "substation_name",
     "interconnection voltage (kv)": "voltage_kv",

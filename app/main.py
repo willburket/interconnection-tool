@@ -126,7 +126,7 @@ elif page == "Geographic Clusters":
         "mirroring how CAISO batches projects into cluster studies."
     )
 
-    if "lat" not in df.columns or "lon" not in df.columns:
+    if "latitude" not in df.columns or "longitude" not in df.columns:
         st.warning(
             "CAISO's public queue file doesn't include lat/lon coordinates. "
             "You'll need to geocode substation names against the HIFLD substation file. "
