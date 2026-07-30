@@ -186,7 +186,7 @@ elif page == "Screening Tool":
     with st.form("screening_form"):
         c1, c2, c3 = st.columns(3)
         with c1:
-            substation = st.text_input("Point of Interconnection (substation name)", placeholder="e.g. MORRO BAY 230KV")
+            substation = st.text_input("Point of Interconnection (substation name)", placeholder="e.g. DAVIS CREEK")
         with c2:
             project_mw = st.number_input("Project capacity (MW)", min_value=1.0, max_value=5000.0, value=200.0)
         with c3:
