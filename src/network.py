@@ -6,6 +6,7 @@ from pathlib import Path
 import networkx as nx
 import pandas as pd
 import logging
+import re
 
 import sys
 sys.path.append(str(Path(__file__).parent.parent))
@@ -82,9 +83,16 @@ def _estimate_thermal_limit(voltage_kv: float) -> float:
     else:
         return 50.0
 
+def clean_key(k):
+    k = re.sub(r"\d+|SUBSTATION|KV", "", k, flags=re.IGNORECASE)
+    k = re.sub(r"\s+", " ", k)
+    return k.upper().strip()
+
 
 def annotate_queue_capacity(G: nx.Graph, queue_df: pd.DataFrame) -> nx.Graph:
     """Sum queued MW per substation from the queue and write onto graph nodes."""
+
+
 
     if "station or transmission line" not in queue_df.columns:
         log.warning("Queue data has no station or transmission line column — skipping annotation")
@@ -95,11 +103,17 @@ def annotate_queue_capacity(G: nx.Graph, queue_df: pd.DataFrame) -> nx.Graph:
         .sum()
         .to_dict()
     )
-    queue_by_sub = {k.upper().strip(): v for k, v in queue_by_sub.items()}
+    # queue_by_sub = {k.upper().strip(): v for k, v in queue_by_sub.items()}
+    # queue_by_sub = {re.sub(r"\d+", "", k).upper().strip(): v for k, v in queue_by_sub.items()}
+    queue_by_sub = {clean_key(k): v for k, v in queue_by_sub.items()}
+
+
 
     matched = 0
     for node in G.nodes():
+        print(node)
         queued = queue_by_sub.get(node, 0.0)
+        # print(queued)
         G.nodes[node]["queued_capacity_mw"] = queued
         if queued > 0:
             matched += 1

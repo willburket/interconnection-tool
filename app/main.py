@@ -206,6 +206,8 @@ elif page == "Screening Tool":
     if submitted and substation:
         results = batch_screen([substation] + alt_subs, project_mw, G, fuel_type)
 
+        print(results)
+
         RISK_COLOR = {"LOW": "green", "MEDIUM": "orange", "HIGH": "red", "UNKNOWN": "gray"}
 
         for result in results:

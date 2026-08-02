@@ -268,4 +268,6 @@ def batch_screen(
         for s in substation_names
     ]
     results.sort(key=lambda r: (r.risk_level.value, -r.utilization_pct))
+
+
     return results

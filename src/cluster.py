@@ -32,7 +32,7 @@ def cluster_projects(
     """
     coords_df = df.dropna(subset=[lat_col, lon_col]).copy()
 
-    print(df.head())
+
 
     if len(coords_df) == 0:
         log.warning("No rows with valid coordinates — returning empty clusters")

@@ -149,13 +149,7 @@ def geocode_substations(df: pd.DataFrame, gpkg_path: str, layer: str = None) -> 
         re.sub(r'\d+', '', row["name"].upper().strip()) : (row.geometry.y, row.geometry.x)
         for _, row in gdf.iterrows()
         if row.geometry is not None
-    }
-
-    print(sub_coords)
-    print(gdf.head())
-
-    
-    
+    }    
 
     def get_coords(substation_name):
         name = str(substation_name).upper().strip()
@@ -176,6 +170,7 @@ def geocode_substations(df: pd.DataFrame, gpkg_path: str, layer: str = None) -> 
     )
 
     matched = df["latitude"].notna().sum()
+    # print(f"Rows with coords: {len(matched):,}")
     log.info("Geocoded %d of %d projects (%.0f%%)", matched, len(df), matched / len(df) * 100)
 
     return df
