@@ -84,7 +84,7 @@ def _estimate_thermal_limit(voltage_kv: float) -> float:
         return 50.0
 
 def clean_key(k):
-    k = re.sub(r"\d+|SUBSTATION|KV", "", k, flags=re.IGNORECASE)
+    k = re.sub(r"\d+|SUBSTATION|KV|VALLEY", "", k, flags=re.IGNORECASE)
     k = re.sub(r"\s+", " ", k)
     return k.upper().strip()
 
@@ -98,25 +98,40 @@ def annotate_queue_capacity(G: nx.Graph, queue_df: pd.DataFrame) -> nx.Graph:
         log.warning("Queue data has no station or transmission line column — skipping annotation")
         return G
 
+
+
     queue_by_sub = (
         queue_df.groupby("station or transmission line")["net mws to grid"]
         .sum()
         .to_dict()
     )
-    # queue_by_sub = {k.upper().strip(): v for k, v in queue_by_sub.items()}
-    # queue_by_sub = {re.sub(r"\d+", "", k).upper().strip(): v for k, v in queue_by_sub.items()}
-    queue_by_sub = {clean_key(k): v for k, v in queue_by_sub.items()}
 
+    queue_by_sub = {clean_key(k): v for k, v in queue_by_sub.items()}
+    # print(queue_by_sub)
 
 
     matched = 0
     for node in G.nodes():
-        print(node)
+        # exact
         queued = queue_by_sub.get(node, 0.0)
-        # print(queued)
+        
+        # Try partial match
+        if(queued == 0):
+            for key in queue_by_sub:
+                # if key in node:
+                #     queued = queue_by_sub.get(key, 0.0)
+                #     print("partial match", node)
+                if node in key:
+                    print("partial match", key)
+                    queued = queue_by_sub.get(key, 0.0)
+         
+
+
         G.nodes[node]["queued_capacity_mw"] = queued
+
         if queued > 0:
             matched += 1
+            # print(node)
 
     log.info("Annotated %d/%d nodes with queue capacity", matched, G.number_of_nodes())
     return G

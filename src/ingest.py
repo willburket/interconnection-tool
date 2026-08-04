@@ -153,6 +153,10 @@ def geocode_substations(df: pd.DataFrame, gpkg_path: str, layer: str = None) -> 
 
     def get_coords(substation_name):
         name = str(substation_name).upper().strip()
+        # name = get_coords(str(substation_name))
+        name = re.sub(r"\d+|SUBSTATION|KV", "", name, flags=re.IGNORECASE)
+        name = re.sub(r"\s+", " ", name)
+
         
         # Try exact match first
         if name in sub_coords:
@@ -161,6 +165,7 @@ def geocode_substations(df: pd.DataFrame, gpkg_path: str, layer: str = None) -> 
         # Try partial match — check if any known substation name is contained in the queue name
         for key, coords in sub_coords.items():
             if key in name or name in key:
+                # print("partial match", name)
                 return coords
         
         return (None, None)
@@ -170,10 +175,17 @@ def geocode_substations(df: pd.DataFrame, gpkg_path: str, layer: str = None) -> 
     )
 
     matched = df["latitude"].notna().sum()
+
     # print(f"Rows with coords: {len(matched):,}")
     log.info("Geocoded %d of %d projects (%.0f%%)", matched, len(df), matched / len(df) * 100)
 
     return df
+
+def clean_key(k):
+    k = re.sub(r"\d+|SUBSTATION|KV", "", k, flags=re.IGNORECASE)
+    k = re.sub(r"\s+", " ", k)
+    return k.upper().strip()
+
 
 # ── Summary ──────────────────────────────────────────────────────────────────
 

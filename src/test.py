@@ -81,6 +81,20 @@ def clean_queue(df: pd.DataFrame) -> pd.DataFrame:
     log.info("Saved cleaned queue (%d rows) to %s", len(df), QUEUE_CLEAN_FILE)
     return df
 
+def count_subs(df:pd.DataFrame):
+
+    subs = []
+
+    for index, row in df.iterrows():
+
+        if row["Station or Transmission Line"] not in subs:
+            subs.append(row["Station or Transmission Line"])
+
+    qty = len(subs)
+    print("unique subs in queue: ", qty)
+    print(subs)
+    return qty
+
 def load_queue(force_refresh: bool = False) -> pd.DataFrame:
     """Load queue from local Excel file."""
     excel_path = Path("publicqueuereport.xlsx")
@@ -91,94 +105,13 @@ def load_queue(force_refresh: bool = False) -> pd.DataFrame:
     
     try:
         df = pd.read_excel(excel_path, skiprows=3)
-        return clean_queue(df)
-    except Exception:
-        print("error loading queue")
+        count_subs(df)
+        return 
+    except Exception as e:
+        print(f"error loading queue {e}")
     return
 
 
-# ── Substation download ──────────────────────────────────────────────────────
-
-def load_substations() -> dict:
-    """
-    Load substation data from a local GeoPackage file.
-    Saves as GeoJSON to data/geo/ for use by network.py.
-    """
-
-    gdf = gpd.read_file("src/electric_substation_hifld_v4.gpkg")
-    
-    # delete non-cali substations and unneeded columns
-    gdf = gdf[gdf['state'] == 'CA']
-    columns = ['id', 'name', 'city', 'state', 'zip', 'type', 'status', 'county', 'latitude', 'longitude', 'lines', 'max_volt', 'min_volt',]
-    gdf = gdf.loc[:, columns]
-
-
-    # 1. Convert standard DataFrame to a GeoDataFrame
-    gdf = gpd.GeoDataFrame(
-        gdf, 
-        geometry=gpd.points_from_xy(gdf['longitude'], gdf['latitude']),
-        crs="EPSG:4326"  # Standard WGS84 coordinate system used by GeoJSON
-    )
-
-    # Save as GeoJSON so network.py can read it as before
-    Path(GEO_DATA_DIR).mkdir(parents=True, exist_ok=True)
-    gdf.to_file(SUBSTATIONS_FILE, driver="GeoJSON")
-
-    log.info("Saved %d substations from %s to %s", len(gdf),"src/electric_substation_hifld_v4.gpkg", SUBSTATIONS_FILE)
-    return json.loads(gdf.to_json())
-
-def geocode_substations(df: pd.DataFrame, gpkg_path: str, layer: str = None) -> pd.DataFrame:
-    """
-    Match queue projects to substation coordinates from the GeoPackage.
-    Adds latitude and longitude columns to the queue DataFrame.
-    """
-
-    if layer:
-        gdf = gpd.read_file(gpkg_path, layer=layer)
-    else:
-        gdf = gpd.read_file(gpkg_path)
-
-    if gdf.crs and gdf.crs.to_epsg() != 4326:
-        gdf = gdf.to_crs(epsg=4326)
-
-
-
-    # Build name -> (lat, lon) lookup from your substation dataset
-    # Update "NAME" to whatever your GeoPackage calls the substation name column
-    sub_coords = {
-        re.sub(r'\d+', '', row["name"].upper().strip()) : (row.geometry.y, row.geometry.x)
-        for _, row in gdf.iterrows()
-        if row.geometry is not None
-    }
-
-    print(sub_coords)
-    print(gdf.head())
-
-    
-    
-
-    def get_coords(substation_name):
-        name = str(substation_name).upper().strip()
-        
-        # Try exact match first
-        if name in sub_coords:
-            return sub_coords[name]
-        
-        # Try partial match — check if any known substation name is contained in the queue name
-        for key, coords in sub_coords.items():
-            if key in name or name in key:
-                return coords
-        
-        return (None, None)
-
-    df[["latitude", "longitude"]] = df["station or transmission line"].apply(
-        lambda x: pd.Series(get_coords(x))
-    )
-
-    matched = df["latitude"].notna().sum()
-    log.info("Geocoded %d of %d projects (%.0f%%)", matched, len(df), matched / len(df) * 100)
-
-    return df
 
 # ── Summary ──────────────────────────────────────────────────────────────────
 
@@ -200,4 +133,4 @@ def queue_summary(df: pd.DataFrame) -> None:
 
 if __name__ == "__main__":
     df = load_queue(force_refresh=True)
-    queue_summary(df)
+    # queue_summary(df)
