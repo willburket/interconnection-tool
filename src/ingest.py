@@ -1,7 +1,7 @@
 # src/ingest.py — download and clean the CAISO interconnection queue
 
 import json
-import requests
+import numpy as np
 import pandas as pd
 from io import BytesIO
 from pathlib import Path
@@ -24,7 +24,6 @@ log = logging.getLogger(__name__)
 
 
 # ── Queue download ───────────────────────────────────────────────────────────
-
 def clean_queue(df: pd.DataFrame) -> pd.DataFrame:
     """
     Normalize columns, cast types, remove withdrawn projects, and cache to parquet.
@@ -36,6 +35,8 @@ def clean_queue(df: pd.DataFrame) -> pd.DataFrame:
     rename = {k: v for k, v in COLUMN_MAP.items() if k in df.columns}
     df = df.rename(columns=rename)
     df.columns = df.columns.str.replace("\n", " ", regex=False).str.replace("  ", " ", regex=False).str.strip()
+
+    
 
 
     # Ensure required columns exist
@@ -56,6 +57,10 @@ def clean_queue(df: pd.DataFrame) -> pd.DataFrame:
         df["interconnection request receive date"] = pd.to_datetime(df["interconnection request receive date"], errors="coerce")
     if "voltage_kv" in df.columns:
         df["voltage_kv"] = pd.to_numeric(df["voltage_kv"], errors="coerce")
+
+    # set up study phase column
+    df = set_study_phase(df)
+    print(df.head())
 
     # Normalize and remap fuel type labels
     df["fuel-1"] = df["fuel-1"].astype(str).str.strip().str.title()
@@ -79,6 +84,24 @@ def clean_queue(df: pd.DataFrame) -> pd.DataFrame:
 
 
     log.info("Saved cleaned queue (%d rows) to %s", len(df), QUEUE_CLEAN_FILE)
+    return df
+
+def set_study_phase(df: pd.DataFrame) -> pd.DataFrame:
+    df['study_phase'] = None  # default column
+
+    for index, row in df.iterrows():
+        sis = row['system impact study or phase i cluster study']
+        fas = row['facilities study (fas) or phase ii cluster study']
+
+        if fas == 'Complete':
+            df.loc[index, 'study_phase'] = 3
+        elif fas not in (None, 'None') and pd.notna(fas):
+            df.loc[index, 'study_phase'] = 2
+        elif sis != 'Complete':
+            df.loc[index, 'study_phase'] = 1
+        else:
+            df.loc[index, 'study_phase'] = 0  # not started
+
     return df
 
 def load_queue(force_refresh: bool = False) -> pd.DataFrame:

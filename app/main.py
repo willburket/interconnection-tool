@@ -5,6 +5,9 @@ import streamlit as st
 import pandas as pd
 import sys
 from pathlib import Path
+import psutil
+
+
 
 sys.path.append(str(Path(__file__).parent.parent))
 from src.ingest import load_queue, queue_summary
@@ -57,6 +60,7 @@ G  = annotate_queue_capacity(G, df)
 # PAGE 1 — Queue Overview
 # ═══════════════════════════════════════════════════════════════════════════════
 if page == "Queue Overview":
+
     st.title("CAISO Interconnection Queue")
     st.caption(f"{len(df):,} active projects · source: CAISO Generator Interconnection Queue Report")
 
@@ -120,12 +124,18 @@ if page == "Queue Overview":
 # PAGE 2 — Geographic Clusters
 # ═══════════════════════════════════════════════════════════════════════════════
 elif page == "Geographic Clusters":
+    # st.write(f"RAM available: {psutil.virtual_memory().available / 1e9:.1f} GB")
+
+    # matched = df.dropna(subset=["latitude", "longitude"])
+    # st.write(f"Rows going into DBSCAN: {len(matched):,}")
+
+
     st.title("Geographic Cluster Analysis")
     st.caption(
-        "Projects within 15 miles of each other are grouped — "
-        "mirroring how CAISO batches projects into cluster studies."
-    )
-
+            "Projects within 15 miles of each other are grouped — "
+            "mirroring how CAISO batches projects into cluster studies."
+        )
+    
     if "latitude" not in df.columns or "longitude" not in df.columns:
         st.warning(
             "CAISO's public queue file doesn't include lat/lon coordinates. "
@@ -133,9 +143,14 @@ elif page == "Geographic Clusters":
             "See README for instructions."
         )
         st.stop()
-
-    df_clustered, cluster_summary = cluster_projects(df)
-
+    try:
+        df_clustered, cluster_summary = cluster_projects(df)
+    except Exception as e:
+        import traceback
+        st.error(f"Error: {e}")
+        st.code(traceback.format_exc())
+        st.stop()
+    
     if cluster_summary.empty:
         st.info("No clusters found with current radius settings.")
         st.stop()
@@ -165,6 +180,9 @@ elif page == "Geographic Clusters":
         df_clustered[df_clustered["cluster"] == selected],
         width='content', hide_index=True,
     )
+
+
+    
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -206,7 +224,7 @@ elif page == "Screening Tool":
     if submitted and substation:
         results = batch_screen([substation] + alt_subs, project_mw, G, fuel_type)
 
-        print(results)
+
 
         RISK_COLOR = {"LOW": "green", "MEDIUM": "orange", "HIGH": "red", "UNKNOWN": "gray"}
 

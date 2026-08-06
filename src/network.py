@@ -122,7 +122,7 @@ def annotate_queue_capacity(G: nx.Graph, queue_df: pd.DataFrame) -> nx.Graph:
                 #     queued = queue_by_sub.get(key, 0.0)
                 #     print("partial match", node)
                 if node in key:
-                    print("partial match", key)
+                    # print("partial match", key)
                     queued = queue_by_sub.get(key, 0.0)
          
 
