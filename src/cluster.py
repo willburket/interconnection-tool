@@ -25,7 +25,7 @@ def cluster_projects(
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     Group queue projects by geographic proximity using DBSCAN.
-    Mirrors how ERCOT groups projects into cluster study batches.
+    Mirrors how ISO's group projects into cluster study batches.
 
     Returns:
         df_labeled  — original df with 'cluster' column added (-1 = noise)
@@ -92,7 +92,6 @@ def cluster_projects(
         clustered["net mws to grid"].sum(),
         noise_count,
     )
-
     return df, cluster_summary
 
 

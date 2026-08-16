@@ -20,6 +20,8 @@ GEO_DATA_DIR       = "data/geo"
 
 QUEUE_RAW_FILE     = "data/raw/caiso_queue_raw.xlsx"
 QUEUE_CLEAN_FILE   = "data/processed/caiso_queue_clean.parquet"
+NYISO_QUEUE_CLEAN_FILE   = "data/processed/caiso_queue_clean.parquet"
+
 SUBSTATIONS_FILE   = "data/geo/caiso_substations.geojson"
 NETWORK_GRAPH_FILE = "data/processed/caiso_network_graph.gpickle"
 

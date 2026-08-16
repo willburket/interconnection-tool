@@ -26,9 +26,11 @@ Thumbs.db
 .idea/
 
 #test report
-/src/publicqueuereport.xlsx
+
 publicqueuereport.xlsx
-cluster-15-interconnection-requests.xlsx
+caiso-queue.xlsx
+nyiso-queue.xlsx 
+
 
 #substation dataset 
 /electric_substation_hifld_v4
