@@ -7,10 +7,8 @@ import sys
 from pathlib import Path
 import psutil
 
-
-
 sys.path.append(str(Path(__file__).parent.parent))
-from src.ingest import load_data, queue_summary
+from src.ingest import load_data, queue_summary, load_caiso_queue, load_nyiso_queue
 from src.cluster import cluster_projects, top_congestion_clusters
 from src.network import (
     build_graph, annotate_queue_capacity,
@@ -18,13 +16,54 @@ from src.network import (
 )
 from src.screening import screen_interconnection_point, batch_screen, RiskLevel
 from src.visualize import queue_map, screening_map
-from config import FUEL_COLORS
+from config import FUEL_COLORS, COLUMN_MAP
 
+# def handle_iso_change():
+#     # iso = st.session_state.iso_selector
+#     # st.session_state.df = load_data(iso)
+#     # # any other reset logic, e.g. clearing a selected POI
+#     # st.session_state.selected_poi = None
+#     st.session_state["queue_data"] = None  # clear stale data from the previous ISO
+#     st.session_state["selected_report"] = None
+
+def load_caiso_queue_report():
+    df = pd.DataFrame()
+    df = load_caiso_queue()
+
+    # df = df.rename(columns={
+    #     "net mws to grid": "capacity_mw",
+    #     "fuel-1": "fuel_type",
+    #     "mw-1": "fuel_mw",
+    # })
+    # df["fuel_type"] = df["fuel_type"].str.title()  # e.g. "Solar", "Battery", "Wind Turbine"
+    return df
+ 
+ 
+def load_nyiso_queue_report():
+    df = pd.DataFrame()
+    df = load_nyiso_queue()
+
+    # df = df.rename(columns={
+    #     "sp (mw)": "capacity_mw",
+    #     "type/ fuel": "fuel_type",
+    #     "sp (mw)": "fuel_mw",
+    # })
+    # df["fuel_type"] = df["fuel_type"].str.title()  # e.g. "Solar", "Battery", "Wind Turbine"
+    return df
+ 
+ 
 def handle_iso_change():
-    iso = st.session_state.iso_selector
-    st.session_state.df = load_data(iso)
-    # any other reset logic, e.g. clearing a selected POI
-    st.session_state.selected_poi = None
+    # Runs before rerun — clear stale state tied to the previous ISO
+    st.session_state["queue_data"] = None
+ 
+ 
+def load_queue_data(iso: str) -> pd.DataFrame:
+    if iso == "CAISO":
+        return load_caiso_queue_report()
+    elif iso == "NYISO":
+        return load_nyiso_queue_report()
+    else:
+        raise ValueError(f"Unknown ISO: {iso}")
 
 st.set_page_config(
     page_title="CAISO & NYISO Interconnection Analyzer",
@@ -36,7 +75,7 @@ st.set_page_config(
 # iso = 'CAISO'
 iso = st.sidebar.selectbox("Select ISO", ["CAISO", "NYISO"], on_change= handle_iso_change, key="iso_selector")
 st.sidebar.title(f"{iso} Interconnection Queue Analysis")
-st.sidebar.caption("California ISO Queue & Network Screening Tool")
+st.sidebar.caption("Multi-ISO Queue & Network Screening Tool")
 st.sidebar.header("Data Source")
 page    = st.sidebar.radio("Navigate", ["Queue Overview", "Geographic Clusters", "Screening Tool"])
 
@@ -50,6 +89,7 @@ st.sidebar.caption("Data sources: CAISO & NYISO public queue report · HIFLD sub
 # ── Data loading ─────────────────────────────────────────────────────────────
 @st.cache_data(ttl=3600, show_spinner="Loading queue...")
 def get_queue(force: bool = False, iso: str = iso):
+
     return load_data(iso)
 
 @st.cache_resource(show_spinner="Building network graph...")
@@ -64,66 +104,84 @@ df = get_queue()
 
 G  = get_graph()
 G  = annotate_queue_capacity(G, df)
+# Load (or reuse cached) data for the current ISO
+if st.session_state.get("queue_data") is None:
+    st.session_state["queue_data"] = load_queue_data(iso)
+ 
+df = st.session_state["queue_data"]
+cols = COLUMN_MAP[iso]
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PAGE 1 — Queue Overview
 # ═══════════════════════════════════════════════════════════════════════════════
 if page == "Queue Overview":
+    if df.empty:
+        st.warning(f"No queue data loaded for {iso} yet.")
+    else:
 
-    st.title(f"{iso} Interconnection Queue")
-    st.caption(f"{len(df):,} active projects · source: CAISO/NYISO Generator Interconnection Queue Report")
+        cols = COLUMN_MAP[iso]
+        
+
+        st.title(f"{iso} Interconnection Queue")
+        st.caption(f"{len(df):,} active projects · source: CAISO/NYISO Generator Interconnection Queue Report")
 
 
+        # KPI row
+        # c1, c2, c3, c4 = st.columns(4)
+        # c1.metric("Total Projects",      f"{len(df):,}")
+        # c2.metric("Total Capacity (MW)", f"{df['net mws to grid'].sum():,.0f}")
+        # c3.metric(
+        #     "Solar + Storage + Wind (MW)",
+        #     f"{df[df['fuel-1'].isin(['Solar','Battery','Wind Turbine'])]['mw-1'].sum():,.0f}"       
+        # )
+        # c4.metric(
+        #     "Avg Days in Queue",
+        #     f"{df['days_in_queue'].mean():.0f}" if "days_in_queue" in df.columns else "N/A"
+        # )
+        cols = COLUMN_MAP[iso]
 
-    # st.info(
-    #     "🌊 **California queue note:** CAISO currently has over 100 GW of projects "
-    #     "in queue — more than double the state's existing generating capacity. "
-    #     "Offshore wind and large-scale storage are the fastest-growing categories.",
-    # )
-
-    # KPI row
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Total Projects",      f"{len(df):,}")
-    c2.metric("Total Capacity (MW)", f"{df['net mws to grid'].sum():,.0f}")
-    c3.metric(
-        "Solar + Storage + Wind (MW)",
-        f"{df[df['fuel-1'].isin(['Solar','Battery','Wind Turbine'])]['mw-1'].sum():,.0f}"       
-    )
-    c4.metric(
-        "Avg Days in Queue",
-        f"{df['days_in_queue'].mean():.0f}" if "days_in_queue" in df.columns else "N/A"
-    )
-
-    st.divider()
-
-    col_l, col_r = st.columns(2)
-    with col_l:
-        st.subheader("Capacity by fuel type (MW)")
-        fuel_summary = (
-            df.groupby("fuel-1")["net mws to grid"]
-            .sum().sort_values(ascending=False)
-            .reset_index().rename(columns={"net mws to grid": "Total MW"})
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Total Projects",      f"{len(df):,}")
+        c2.metric("Total Capacity (MW)", f"{df[cols['capacity']].sum():,.0f}")
+        c3.metric(
+            "Solar + Storage + Wind (MW)",
+            f"{df[df[cols['fuel_type']].isin(cols['renewable_fuels'])][cols['fuel_mw']].sum():,.0f}"
         )
-        st.bar_chart(fuel_summary.set_index("fuel-1"))
+        c4.metric(
+            "Avg Days in Queue",
+            f"{df['days_in_queue'].mean():.0f}" if "days_in_queue" in df.columns else "N/A"
+        )
 
-    with col_r:
-        st.subheader("Projects by study phase")
-        if "study_phase" in df.columns:
-            phase_counts = df["study_phase"].value_counts().reset_index()
-            phase_counts.columns = ["Study Phase", "Count"]
-            st.dataframe(phase_counts, width="content", hide_index=True)
-
-    # Offshore wind spotlight
-    offshore = df[df["fuel-1"] == "wind turbine"]
-    if not offshore.empty:
         st.divider()
-        st.subheader(f"🌊 Offshore wind — {len(offshore)} projects, {offshore['net mws to grid'].sum():,.0f} MW")
-        st.dataframe(
-            offshore[["name", "net mws to grid", "station or transmission line",
-                       "study_phase", "days_in_queue"]].sort_values("net mws to grid", ascending=False),
-            width=True, hide_index=True,
-        )
+
+        col_l, col_r = st.columns(2)
+        with col_l:
+            st.subheader("Capacity by fuel type (MW)")
+            fuel_summary = (
+                df.groupby("fuel-1")["capacity"]
+                .sum().sort_values(ascending=False)
+                .reset_index().rename(columns={"capacity": "Total MW"})
+            )
+            st.bar_chart(fuel_summary.set_index("fuel-1"))
+
+        with col_r:
+            st.subheader("Projects by study phase")
+            if "study_phase" in df.columns:
+                phase_counts = df["study_phase"].value_counts().reset_index()
+                phase_counts.columns = ["Study Phase", "Count"]
+                st.dataframe(phase_counts, width="content", hide_index=True)
+
+        # Offshore wind spotlight
+        # offshore = df[df["fuel-1"] == "wind turbine"]
+        # if not offshore.empty:
+        #     st.divider()
+        #     st.subheader(f"🌊 Offshore wind — {len(offshore)} projects, {offshore['net mws to grid'].sum():,.0f} MW")
+        #     st.dataframe(
+        #         offshore[["name", "net mws to grid", "station or transmission line",
+        #                 "study_phase", "days_in_queue"]].sort_values("net mws to grid", ascending=False),
+        #         width=True, hide_index=True,
+        #     )
 
     st.divider()
     st.subheader("Full queue")

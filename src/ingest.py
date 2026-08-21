@@ -104,7 +104,7 @@ def clean_nyiso_queue(df: pd.DataFrame) -> pd.DataFrame:
 
 
     # Ensure required columns exist
-    for col in ["project_name", "type/ fuel", "wp (mw)",
+    for col in ["project_name", "type/ fuel", "sp (mw)",
                 "points of interconnection", "project status #", "availability of studies"]:
         if col not in df.columns:
             df[col] = None
@@ -147,7 +147,8 @@ def clean_nyiso_queue(df: pd.DataFrame) -> pd.DataFrame:
             print(f"Problem column: {col} — {e}")
     # df.to_parquet(QUEUE_CLEAN_FILE, index=False)
 
-
+    print("nyiso queue")
+    print(df.head())
     log.info("Saved cleaned queue (%d rows) to %s", len(df), NYISO_QUEUE_CLEAN_FILE)
     return df
 
@@ -211,11 +212,10 @@ def load_nyiso_queue():
     return
 
 def load_data(iso_name: str):
-
+    print("load data: ", iso_name)
     if iso_name == "CAISO":
         return load_caiso_queue()   # your existing CAISO loader
     elif iso_name == "NYISO":
-
         return load_nyiso_queue()   # your NYISO loader
 
 # ── Substation download ──────────────────────────────────────────────────────

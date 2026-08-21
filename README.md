@@ -1,16 +1,16 @@
-# CAISO Interconnection Queue Analyzer
+# CAISO/NYISO Interconnection Queue Analyzer
 
-A preliminary interconnection screening and queue analysis tool for the California ISO (CAISO), built on publicly available data. Mirrors the first-pass evaluation workflow used by interconnection engineers when assessing new generator applications.
+A preliminary interconnection screening and queue analysis tool for the California ISO (CAISO) & New York ISO (NYISO), built on publicly available data. Mirrors the first-pass evaluation workflow used by interconnection engineers when assessing new generator applications.
 
 ---
 
 ## What it does
 
 **Queue Analysis**
-Pulls and cleans the live CAISO Generator Interconnection Queue report, normalizes fuel type labels across CAISO's inconsistent naming conventions, and surfaces summary stats by fuel type, study phase, and days in queue.
+Pulls and cleans the live CAISO/NYISO Generator Interconnection Queue report, normalizes fuel type labels across CAISO's inconsistent naming conventions, and surfaces summary stats by fuel type, study phase, and days in queue.
 
 **Geographic Clustering**
-Groups co-located projects using DBSCAN — mirroring how CAISO batches nearby projects into cluster studies with shared network upgrade cost responsibility. Identifies high-congestion zones where cumulative queued capacity exceeds local thermal headroom.
+Groups co-located projects using DBSCAN — mirroring how ISO's batch nearby projects into cluster studies with shared network upgrade cost responsibility. Identifies high-congestion zones where cumulative queued capacity exceeds local thermal headroom.
 
 **Network Screening**
 Evaluates candidate points of interconnection (POIs) against:
@@ -46,8 +46,11 @@ streamlit run app/main.py
 
 ## Data sources
 
-Queue Report Link: 
+CAISO Queue Report Link: 
 https://www.caiso.com/library/public-queue-report
+
+NYISO Queue Report Link: 
+https://www.nyiso.com/interconnections
 
 Substation DataSet Link (Download 'Electrical Substations' layer):
 gem.anl.gov/tool 
@@ -62,11 +65,11 @@ interconnection-tool/
 ├── requirements.txt
 ├── .gitignore
 ├── data/
-│   ├── raw/               # downloaded CAISO xlsx (gitignored)
+│   ├── raw/               # downloaded CAISO/NYISO xlsx (gitignored)
 │   ├── processed/         # cleaned parquet + cached graph (gitignored)
 │   └── geo/               # HIFLD GeoJSON (gitignored)
 ├── src/
-│   ├── ingest.py          # download + clean CAISO queue and HIFLD substations
+│   ├── ingest.py          # download + clean queue and HIFLD substations
 │   ├── network.py         # NetworkX graph from substation data
 │   ├── cluster.py         # DBSCAN geographic clustering
 │   ├── screening.py       # thermal, radial, and CAISO-specific screening logic
@@ -98,8 +101,8 @@ Unlike ERCOT (which tops out at 345 kV), CAISO has significant 500 kV transmissi
 
 ## Known limitations
 
-- CAISO's public queue file does not include lat/lon coordinates. The geographic clustering page requires geocoding substation names against the HIFLD dataset. A fuzzy-match utility is available in `src/network.py::get_substation_info()`.
-- Thermal limits are estimated from voltage class, not actual line ratings. Replace `_estimate_thermal_limit()` in `src/network.py` with real ratings from CAISO's published facility data for production use.
+- Public queue files do not include lat/lon coordinates. The geographic clustering page requires geocoding substation names against the HIFLD dataset. A fuzzy-match utility is available in `src/network.py::get_substation_info()`.
+- Thermal limits are estimated from voltage class, not actual line ratings. Replace `_estimate_thermal_limit()` in `src/network.py` with real ratings from published facility data for production use.
 
 ---
 
