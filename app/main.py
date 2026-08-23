@@ -8,7 +8,7 @@ from pathlib import Path
 import psutil
 
 sys.path.append(str(Path(__file__).parent.parent))
-from src.ingest import load_data, queue_summary, load_caiso_queue, load_nyiso_queue
+from src.ingest import load_data, queue_summary, load_caiso_queue, load_nyiso_queue, normalize_columns
 from src.cluster import cluster_projects, top_congestion_clusters
 from src.network import (
     build_graph, annotate_queue_capacity,
@@ -109,7 +109,7 @@ if st.session_state.get("queue_data") is None:
     st.session_state["queue_data"] = load_queue_data(iso)
  
 df = st.session_state["queue_data"]
-cols = COLUMN_MAP[iso]
+
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -120,7 +120,7 @@ if page == "Queue Overview":
         st.warning(f"No queue data loaded for {iso} yet.")
     else:
 
-        cols = COLUMN_MAP[iso]
+        # cols = COLUMN_MAP[iso]
         
 
         st.title(f"{iso} Interconnection Queue")
@@ -139,31 +139,37 @@ if page == "Queue Overview":
         #     "Avg Days in Queue",
         #     f"{df['days_in_queue'].mean():.0f}" if "days_in_queue" in df.columns else "N/A"
         # )
-        cols = COLUMN_MAP[iso]
+
+        # NORMALIZE COLUMNS HERE
+        df = normalize_columns(df, iso)
+        print("CURRENT DF COLUMNS")
+        print(df.columns)
 
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Total Projects",      f"{len(df):,}")
-        c2.metric("Total Capacity (MW)", f"{df[cols['capacity']].sum():,.0f}")
-        c3.metric(
-            "Solar + Storage + Wind (MW)",
-            f"{df[df[cols['fuel_type']].isin(cols['renewable_fuels'])][cols['fuel_mw']].sum():,.0f}"
-        )
+        c1.metric("Total Projects", f"{len(df):,}")
+        c2.metric("Total Capacity (MW)", f"{df['capacity_mw'].sum():,.0f}")
+        # c3.metric(
+        #     "Solar + Storage + Wind (MW)",
+        #     f"{df[df['fuel_type'].isin(RENEWABLE_FUELS)]['fuel_mw'].sum():,.0f}"
+        # )
         c4.metric(
             "Avg Days in Queue",
             f"{df['days_in_queue'].mean():.0f}" if "days_in_queue" in df.columns else "N/A"
         )
-
         st.divider()
 
         col_l, col_r = st.columns(2)
+
+
+
         with col_l:
             st.subheader("Capacity by fuel type (MW)")
             fuel_summary = (
-                df.groupby("fuel-1")["capacity"]
+                df.groupby("fuel_type")["capacity_mw"]
                 .sum().sort_values(ascending=False)
-                .reset_index().rename(columns={"capacity": "Total MW"})
+                .reset_index().rename(columns={"capacity_mw": "Total MW"})
             )
-            st.bar_chart(fuel_summary.set_index("fuel-1"))
+            st.bar_chart(fuel_summary.set_index("fuel_type"))
 
         with col_r:
             st.subheader("Projects by study phase")
@@ -185,7 +191,7 @@ if page == "Queue Overview":
 
     st.divider()
     st.subheader("Full queue")
-    st.dataframe(df.sort_values("net mws to grid", ascending=False), width="content", hide_index=True)
+    st.dataframe(df.sort_values("capacity_mw", ascending=False), width="content", hide_index=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

@@ -98,7 +98,7 @@ def clean_nyiso_queue(df: pd.DataFrame) -> pd.DataFrame:
     rename = {k: v for k, v in COLUMN_MAP.items() if k in df.columns}
     df = df.rename(columns=rename)
     df.columns = df.columns.str.replace("\n", " ", regex=False).str.replace("  ", " ", regex=False).str.strip()
-    print(df.columns)
+
 
 
 
@@ -147,8 +147,6 @@ def clean_nyiso_queue(df: pd.DataFrame) -> pd.DataFrame:
             print(f"Problem column: {col} — {e}")
     # df.to_parquet(QUEUE_CLEAN_FILE, index=False)
 
-    print("nyiso queue")
-    print(df.head())
     log.info("Saved cleaned queue (%d rows) to %s", len(df), NYISO_QUEUE_CLEAN_FILE)
     return df
 
@@ -217,6 +215,31 @@ def load_data(iso_name: str):
         return load_caiso_queue()   # your existing CAISO loader
     elif iso_name == "NYISO":
         return load_nyiso_queue()   # your NYISO loader
+
+def normalize_columns(df: pd.DataFrame, iso: str):
+    try:
+        if iso == 'CAISO':
+            df = df.rename(columns={
+            "net mws to grid": "capacity_mw",
+            "fuel-1": "fuel_type",
+            "mw-1": "fuel_mw",
+            })
+            df["fuel_type"] = df["fuel_type"].str.title()  # e.g. "Solar", "Battery", "Wind Turbine"
+            return df
+        elif iso == 'NYISO':
+            # rename columns 
+            df = df.rename(columns={
+            "sp (mw)": "capacity_mw",
+            "type/ fuel": "fuel_type",
+            # "sp (mw)": "fuel_mw",
+            })
+            # need to rename fuel types
+            
+            return df
+    except: 
+        print("error normalizing columns")
+
+    return
 
 # ── Substation download ──────────────────────────────────────────────────────
 
