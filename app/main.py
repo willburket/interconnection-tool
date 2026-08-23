@@ -16,7 +16,7 @@ from src.network import (
 )
 from src.screening import screen_interconnection_point, batch_screen, RiskLevel
 from src.visualize import queue_map, screening_map
-from config import FUEL_COLORS, COLUMN_MAP
+from config import FUEL_COLORS, RENEWABLE_FUELS
 
 # def handle_iso_change():
 #     # iso = st.session_state.iso_selector
@@ -148,10 +148,10 @@ if page == "Queue Overview":
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("Total Projects", f"{len(df):,}")
         c2.metric("Total Capacity (MW)", f"{df['capacity_mw'].sum():,.0f}")
-        # c3.metric(
-        #     "Solar + Storage + Wind (MW)",
-        #     f"{df[df['fuel_type'].isin(RENEWABLE_FUELS)]['fuel_mw'].sum():,.0f}"
-        # )
+        c3.metric(
+            "Solar + Storage + Wind (MW)",
+            f"{df[df['fuel_type'].isin(RENEWABLE_FUELS)]['fuel_mw'].sum():,.0f}"
+        )
         c4.metric(
             "Avg Days in Queue",
             f"{df['days_in_queue'].mean():.0f}" if "days_in_queue" in df.columns else "N/A"

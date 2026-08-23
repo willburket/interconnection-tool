@@ -171,9 +171,49 @@ def set_caiso_study_phase(df: pd.DataFrame) -> pd.DataFrame:
 def set_nyiso_study_phase(df: pd.DataFrame) -> pd.DataFrame:
     df['study_phase'] = None  # default column
 
-    # for index, row in df.iterrows():
-    #     pass
-
+    for index, row in df.iterrows():
+        match row['project status #']:
+            case 1:
+                df.loc[index, 'study_phase'] = "Scoping Meeting Pending"
+            case 2:
+                df.loc[index, 'study_phase'] = "FES Pending"
+            case 3:
+                df.loc[index, 'study_phase'] = "FES in Progress"
+            case 4: 
+                df.loc[index, 'study_phase'] = "SRIS/SIS Pending"
+            case 5: 
+                df.loc[index, 'study_phase'] = "SRIS/SIS in Progress"
+            case 6: 
+                df.loc[index, 'study_phase'] = "SRIS/SIS Approved"
+            case 7:
+                df.loc[index, 'study_phase'] = "FS Pending"
+            case 8: 
+                df.loc[index, 'study_phase'] = "Rejected Cost Allocation/Next FS Pending" 
+            case 9:
+                df.loc[index, 'study_phase'] = "FS in Progress" 
+            case 10: 
+                df.loc[index, 'study_phase'] = "Accepted Cost Allocation/IA in Progress"
+            case 11: 
+                df.loc[index, 'study_phase'] = "IA Completed" 
+            case 12: 
+                df.loc[index, 'study_phase'] = "Under Construction"    
+            case 13: 
+                df.loc[index, 'study_phase'] = "In Service for Test" 
+            case 14: 
+                df.loc[index, 'study_phase'] = "In Service Commercial" 
+            case 15: 
+                df.loc[index, 'study_phase'] = "IA Completed" 
+            case 0:
+                df.loc[index, 'study_phase'] = "Withdrawn" 
+            case 15: 
+                df.loc[index, 'study_phase'] = "Partial In-Service" 
+                
+# ● Project Status # Key: 1=Scoping Meeting Pending, 2=FES Pending, 3=FES in Progress,3A=FES Approved/Performed, 
+# 4=SRIS/SIS Pending, 5=SRIS/SIS in Progress,5P=SRIS Commenced, Stopped and Pending  Adoption of IP, 
+# 6=SRIS/SIS Approved, 7=FS Pending, 8=Rejected Cost Allocation/Next FS Pending, 9=FS in Progress, 
+# 10=Accepted Cost Allocation/IA in Progress, 
+# 11=IA Completed, 12=Under Construction, 13=In Service for Test, 14=In Service Commercial, 0=Withdrawn, 
+# 15=Partial In-Service, P=Pending Adoption of IP Compliance with Order 2023
     return df
 
 
@@ -231,8 +271,9 @@ def normalize_columns(df: pd.DataFrame, iso: str):
             df = df.rename(columns={
             "sp (mw)": "capacity_mw",
             "type/ fuel": "fuel_type",
-            # "sp (mw)": "fuel_mw",
             })
+
+            df['fuel_mw'] = df['capacity_mw']
             # need to rename fuel types
             
             return df

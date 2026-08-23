@@ -78,19 +78,6 @@ FUEL_COLORS = {
     "Other":         "#6B7280",
 }
 
-COLUMN_MAP = {
-    "CAISO": {
-        "capacity": "net mws to grid",
-        "fuel_type": "fuel-1",
-        "fuel_mw": "mw-1",
-        "renewable_fuels": ["Solar", "Battery", "Wind Turbine"],
-    },
-    "NYISO": {
-        "capacity": "sp (mw)",      
-        "fuel_type": "type/ fuel",
-        "fuel_mw": "sp (mw)",
-        "renewable_fuels": ["S", "ES", "W"],  # NYISO's fuel labels
-    },
-}
+RENEWABLE_FUELS = ["Solar", "Battery", "Wind Turbine", "S", "ES", "W"]
 
 # Type / Fuel Key: ST=Steam Turbine, CT=Combustion Turbine, CC, CS= Steam Turbine & Combustion Turbine, H=Hydro, PS=Pumped Storage, W=Wind, OSW= Off-Shore Wind, NU=Nuclear, NG=Natural Gas, M=Methane, SW=Solid Waste, S=Solar, Wo=Wood, F=Flywheel ES=Energy Storage, O=Oil, C=Coal, D=Dual Fuel, AC, 
